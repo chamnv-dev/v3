@@ -1,37 +1,28 @@
-# -*- coding: utf-8 -*-
+# ui/workers/script_worker.py - PATCH
 """
-Script Worker - Non-blocking script generation using QThread
+Enhanced error handling for script generation
+Fix for Issue #7: Better error messages
 """
 import json
 import sys
 import traceback
 from PyQt5.QtCore import QThread, pyqtSignal
 
+from PyQt5.QtCore import QThread, pyqtSignal
+import traceback
+import json
 
 class ScriptWorker(QThread):
-    """
-    Background worker for script generation
-    Prevents UI freezing during LLM API calls
-    """
-
-    # Signals
-    progress = pyqtSignal(str)  # Progress messages
-    done = pyqtSignal(dict)     # Result data
-    error = pyqtSignal(str)     # Error messages
-
-    def __init__(self, cfg: dict, parent=None):
-        """
-        Initialize script worker
-        
-        Args:
-            cfg: Configuration dictionary with all settings
-            parent: Parent QObject
-        """
-        super().__init__(parent)
-        self.cfg = cfg
-
+    progress = pyqtSignal(str)
+    done = pyqtSignal(object)
+    error = pyqtSignal(str)
+    
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.should_stop = False
+    
     def run(self):
-        """Execute script generation in background thread"""
         try:
             self.progress.emit("Đang tạo kịch bản...")
 

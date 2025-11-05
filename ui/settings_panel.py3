@@ -70,68 +70,33 @@ class SettingsPanel(QWidget):
         g.addWidget(_lab('Thời hạn sử dụng:'),1,2); g.addWidget(self.ed_expiry,1,3)
         root.addWidget(acc)
 
-        # Dòng 2: Labs + ProjectID | ElevenLabs + VoiceID (Equal width - FORCED)
-        row2 = _QW()
-        grid2 = QHBoxLayout(row2)  # Use HBoxLayout for true 50-50 split
-        grid2.setSpacing(12)
-        
-        # Left column (50%)
-        left_col = _QW()
-        left_layout = QVBoxLayout(left_col)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(4)
+        # Dòng 2: Labs + ProjectID | ElevenLabs + VoiceID (Equal width)
+        row2 = _QW(); grid2 = QGridLayout(row2); grid2.setHorizontalSpacing(12); grid2.setVerticalSpacing(4)
+        grid2.setColumnStretch(0, 1)  # Equal stretch for left column
+        grid2.setColumnStretch(1, 1)  # Equal stretch for right column
         
         labs_init = self.state.get('labs_tokens') or self.state.get('tokens') or []
         self.w_labs = KeyList(title='Google Labs Token (OAuth)', kind='labs', initial=labs_init)
-        left_layout.addWidget(self.w_labs)
-        
-        self.ed_project = _line('Project ID')
-        self.ed_project.setText(self.state.get('flow_project_id','87b19267-13d6-49cd-a7ed-db19a90c9339'))
-        proj_box = _QW()
-        hp = QHBoxLayout(proj_box)
-        hp.setContentsMargins(0, 0, 0, 0)
-        hp.addWidget(_lab('Project ID cho Flow:'))
-        hp.addWidget(self.ed_project)
-        left_layout.addWidget(proj_box)
-        
-        grid2.addWidget(left_col, 1)  # stretch factor = 1
-        
-        # Right column (50%)
-        right_col = _QW()
-        right_layout = QVBoxLayout(right_col)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(4)
-        
+        grid2.addWidget(self.w_labs, 0, 0, 1, 1)
+        self.ed_project = _line('Project ID'); self.ed_project.setText(self.state.get('flow_project_id','87b19267-13d6-49cd-a7ed-db19a90c9339'))
+        proj_box = _QW(); hp = QHBoxLayout(proj_box); hp.setContentsMargins(0,0,0,0); hp.addWidget(_lab('Project ID cho Flow:')); hp.addWidget(self.ed_project)
+        grid2.addWidget(proj_box, 1, 0, 1, 1)
         self.w_eleven = KeyList(title='Elevenlabs API Keys', kind='elevenlabs', initial=self.state.get('elevenlabs_api_keys') or [])
-        right_layout.addWidget(self.w_eleven)
-        
-        self.ed_voice = _line('Voice ID')
-        self.ed_voice.setText(self.state.get('default_voice_id','3VnrjnYrskPMDsapTr8X'))
-        voice_box = _QW()
-        hv = QHBoxLayout(voice_box)
-        hv.setContentsMargins(0, 0, 0, 0)
-        hv.addWidget(_lab('Voice ID (Elevenlabs):'))
-        hv.addWidget(self.ed_voice)
-        right_layout.addWidget(voice_box)
-        
-        grid2.addWidget(right_col, 1)  # stretch factor = 1
-        
+        grid2.addWidget(self.w_eleven, 0, 1, 1, 1)
+        self.ed_voice = _line('Voice ID'); self.ed_voice.setText(self.state.get('default_voice_id','3VnrjnYrskPMDsapTr8X'))
+        voice_box = _QW(); hv = QHBoxLayout(voice_box); hv.setContentsMargins(0,0,0,0); hv.addWidget(_lab('Voice ID (Elevenlabs):')); hv.addWidget(self.ed_voice)
+        grid2.addWidget(voice_box, 1, 1, 1, 1)
         root.addWidget(row2)
 
-        # Dòng 3: Google API | OpenAI API (Equal width - FORCED)
-        row3 = _QW()
-        grid3 = QHBoxLayout(row3)  # Use HBoxLayout for true 50-50 split
-        grid3.setSpacing(12)
+        # Dòng 3: Google API | OpenAI API (Equal width)
+        row3 = _QW(); grid3 = QGridLayout(row3); grid3.setHorizontalSpacing(12); grid3.setVerticalSpacing(4)
+        grid3.setColumnStretch(0, 1)  # Equal stretch for left column
+        grid3.setColumnStretch(1, 1)  # Equal stretch for right column
         
-        # Left column (50%)
         g_list = self.state.get('google_api_keys') or ([] if not self.state.get('google_api_key') else [self.state.get('google_api_key')])
         self.w_google = KeyList(title='Google API Keys', kind='google', initial=g_list)
-        grid3.addWidget(self.w_google, 1)  # stretch factor = 1
-        
-        # Right column (50%)
         self.w_openai = KeyList(title='OpenAI API Keys', kind='openai', initial=self.state.get('openai_api_keys') or [])
-        grid3.addWidget(self.w_openai, 1)  # stretch factor = 1
-        
+        grid3.addWidget(self.w_google, 0, 0, 1, 1); grid3.addWidget(self.w_openai, 0, 1, 1, 1)
         root.addWidget(row3)
 
         

@@ -66,7 +66,6 @@ DOMAIN_PROMPTS = {
 }
 
 
-
 def get_all_domains():
     """Get list of all domain names"""
     return list(DOMAIN_PROMPTS.keys())
@@ -127,3 +126,28 @@ def get_all_prompts():
                 "system_prompt": prompt
             })
     return result
+
+
+def reload_prompts():
+    """
+    Hot reload prompts by reimporting the module
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        import importlib
+        import sys
+        
+        # Get the current module
+        current_module = sys.modules.get(__name__)
+        
+        if current_module:
+            # Reload the module
+            importlib.reload(current_module)
+            return True, "Đã reload prompts thành công!"
+        else:
+            return False, "Không tìm thấy module để reload"
+            
+    except Exception as e:
+        return False, f"Lỗi khi reload: {str(e)}"

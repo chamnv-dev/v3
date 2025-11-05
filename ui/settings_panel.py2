@@ -135,13 +135,11 @@ class SettingsPanel(QWidget):
         root.addWidget(row3)
 
         
-        # Dòng 4: Download Directory + System Prompts Updater (same row)
-        row4 = _QW()
-        grid4 = QGridLayout(row4)
-        grid4.setHorizontalSpacing(12)
-        grid4.setVerticalSpacing(4)
-        
-        # Left: Download Directory (50% width)
+        # Dòng 4: Download + System Prompts (Equal width)
+        row4_layout = QHBoxLayout()
+        row4_layout.setSpacing(12)
+
+        # Left: Download (50%)
         st = QGroupBox('Thư mục tải về'); _decorate_group(st)
         gs = QGridLayout(st); gs.setVerticalSpacing(6)
         self.rb_local = QRadioButton('Lưu tại Local'); self.rb_drive = QRadioButton('Google Drive')
@@ -310,3 +308,5 @@ class SettingsPanel(QWidget):
         
         finally:
             self.btn_update_prompts.setEnabled(True)
+
+        # Right: System Prompts (50%)
