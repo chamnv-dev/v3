@@ -310,7 +310,10 @@ class _Worker(QObject):
             self.log.emit("[WARN] Chưa cấu hình thư mục tải về trong Cài đặt, dùng Downloads mặc định.")
         title = p["project"] or data.get("title_vi") or data.get("title_tgt") or "Project"
         os.makedirs(root, exist_ok=True)
-        prj_dir = os.path.join(root, title); os.makedirs(prj_dir, exist_ok=True)
+        # Sanitize title to avoid invalid path characters
+        safe_title = title.replace(':', ' -').replace('/', '_').replace('\\', '_')
+        safe_title = re.sub(r'[<>"|?*]', '', safe_title).strip() or "Project"
+        prj_dir = os.path.join(root, safe_title); os.makedirs(prj_dir, exist_ok=True)
         dir_script = os.path.join(prj_dir, "01_KichBan"); os.makedirs(dir_script, exist_ok=True)
         dir_prompts= os.path.join(prj_dir, "02_Prompts"); os.makedirs(dir_prompts, exist_ok=True)
         dir_videos = os.path.join(prj_dir, "03_Videos"); os.makedirs(dir_videos, exist_ok=True)

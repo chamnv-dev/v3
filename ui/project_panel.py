@@ -52,6 +52,28 @@ def safe_name(s: str)->str:
     s = re.sub(r"[^a-z0-9._-]+", "_", s)
     s = re.sub(r"_+", "_", s).strip("_")
     return s or "project"
+def sanitize_path(path_str):
+    """
+    Sanitize path string by removing/replacing invalid Windows characters
+    Windows invalid: < > : " / \\ | ? *
+    """
+    if not path_str:
+        return path_str
+    # Split path into components
+    parts = path_str.split(os.sep)
+    sanitized_parts = []
+    for part in parts:
+        # Keep drive letter (C:) intact
+        if len(part) == 2 and part[1] == ':' and part[0].isalpha():
+            sanitized_parts.append(part)
+        else:
+            # Sanitize each path component
+            sanitized = part.replace(':', ' -')  # Replace colon with dash
+            sanitized = re.sub(r'[<>"|?*]', '', sanitized)  # Remove invalid chars
+            sanitized = re.sub(r'\\s+', ' ', sanitized).strip()  # Clean spaces
+            sanitized_parts.append(sanitized or "folder")
+    return os.sep.join(sanitized_parts)
+
 
 BASE_COLS = ["Dự án","Cảnh","Image","Prompt","Trạng thái"]
 def _video_labels(n): return [f"Video {i+1}" for i in range(max(0,n))]
@@ -407,7 +429,9 @@ class ProjectPanel(QWidget):
         cfg = self._settings()
         root = cfg.get("download_root")
         if not root: root = os.path.join(os.path.expanduser("~"), "Downloads", "VeoProjects")
-        proj_dir = os.path.join(root, self.project_name)
+        # Sanitize project name to avoid invalid characters
+        safe_project_name = sanitize_path(self.project_name)
+        proj_dir = os.path.join(root, safe_project_name)
         dirs = {
             "root": root,
             "project": proj_dir,

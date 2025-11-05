@@ -1,191 +1,393 @@
-import sys, os
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QLineEdit, QListWidget, QSplitter, QLabel, QTabWidget
+# main_image2video.py
+"""
+Video Super Ultra V7 - Main Application
+Complete with all V5/V7 panels:
+- Image2Video V7 (multi-project, modern UI)
+- Text2Video V5 (ocean blue tabs, full workflow)
+- Video Ads V5 (collapsible sections, character bible)
+- Settings Panel
+
+Author: chamnv-dev
+Date: 2025-01-05
+Version: 7.0.0
+"""
+
+import sys
+import os
+from PyQt5.QtWidgets import (
+    QApplication, QTabWidget, QMessageBox, QWidget
+)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Settings Panel
 try:
-    from ui.project_panel import ProjectPanel
-    from ui.settings_panel import SettingsPanel
-except Exception:
-    from project_panel import ProjectPanel
-    from settings_panel import SettingsPanel
+    from ui.settings_panel_v3_compact import SettingsPanelV3Compact as SettingsPanel
+except ImportError:
+    try:
+        from ui.settings_panel import SettingsPanel
+    except ImportError:
+        print("⚠️ Warning: SettingsPanel not found, using placeholder")
+        SettingsPanel = None
+
+# Image2Video V7 - NEW VERSION
 try:
-    from utils.config import load as load_cfg
-except Exception:
-    from config import load as load_cfg
+    from ui.image2video_panel_v7_complete import Image2VideoPanelV7 as Image2VideoPanel
+    print("✓ Loaded Image2Video V7")
+except ImportError as e:
+    print(f"⚠️ Image2Video V7 not found, falling back to original: {e}")
+    try:
+        from ui.project_panel import ProjectPanel as Image2VideoPanel
+    except ImportError:
+        print("❌ Error: No Image2Video panel available")
+        Image2VideoPanel = None
 
-class ProjectsPane(QWidget):
-    def __init__(self):
-        super().__init__()
-        self._build_ui()
-        self._projects = {}
-        self._queue_running = False
-        # Always ensure at least one project exists so the right pane is visible immediately
-        self._ensure_default_project()
+# Text2Video V5 - NEW VERSION
+try:
+    from ui.text2video_panel_v5_complete import Text2VideoPanelV5 as Text2VideoPanel
+    print("✓ Loaded Text2Video V5")
+except ImportError as e:
+    print(f"⚠️ Text2Video V5 not found, falling back to original: {e}")
+    try:
+        from ui.text2video_panel import Text2VideoPane as Text2VideoPanel
+    except ImportError:
+        print("❌ Error: No Text2Video panel available")
+        Text2VideoPanel = None
 
-    def _build_ui(self):
-        root=QHBoxLayout(self); root.setContentsMargins(6,6,6,6); root.setSpacing(4)
-        split=QSplitter(Qt.Horizontal); root.addWidget(split,1)
-        split.setSizes([250, 1110])
+# Video Ads V5 - NEW VERSION
+try:
+    from ui.video_ban_hang_v5_complete import VideoBanHangV5 as VideoAdsPanel
+    print("✓ Loaded Video Ads V5")
+except ImportError as e:
+    print(f"⚠️ Video Ads V5 not found, falling back to original: {e}")
+    try:
+        from ui.video_ban_hang_panel import VideoBanHangPanel as VideoAdsPanel
+    except ImportError:
+        print("❌ Error: No Video Ads panel available")
+        VideoAdsPanel = None
 
-        # Left column - Combined project management + list (250px fixed)
-        left=QWidget(); left.setFixedWidth(250); lv=QVBoxLayout(left); lv.setSpacing(4)
+# Utils
+try:
+    from utils import config as cfg
+    from utils.version import get_version
+except ImportError as e:
+    print(f"⚠️ Utils import warning: {e}")
+    cfg = None
+    get_version = lambda: "7.0.0"
+
+# Theme
+try:
+    from ui.styles.light_theme_v2 import apply_light_theme_v2 as apply_theme
+except ImportError:
+    try:
+        from ui.styles.light_theme import apply_light_theme as apply_theme
+    except ImportError:
+        print("⚠️ Warning: No theme found, using default")
+        apply_theme = lambda app: None
+
+# Main tab styling
+MAIN_TAB_STYLE = """
+QTabWidget::pane {
+    border: none;
+    background: #FAFAFA;
+}
+
+QTabBar::tab {
+    background: #E0E0E0;
+    color: #616161;
+    border: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 12px 24px;
+    margin-right: 4px;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    min-width: 120px;
+}
+
+QTabBar::tab:hover {
+    background: #BDBDBD;
+}
+
+QTabBar::tab:selected {
+    background: #1E88E5;
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+}
+
+/* Different colors for each tab when selected */
+QTabBar::tab:nth-child(1):selected { background: #5C6BC0; }  /* Settings - Purple */
+QTabBar::tab:nth-child(2):selected { background: #1E88E5; }  /* Image2Video - Blue */
+QTabBar::tab:nth-child(3):selected { background: #26A69A; }  /* Text2Video - Teal */
+QTabBar::tab:nth-child(4):selected { background: #FF7043; }  /* Video Ads - Orange */
+"""
+
+
+class PlaceholderPanel(QWidget):
+    """Placeholder panel when a module is not available"""
+    
+    def __init__(self, panel_name, error_msg="", parent=None):
+        super().__init__(parent)
+        from PyQt5.QtWidgets import QVBoxLayout, QLabel
         
-        # Header
-        lbl_header = QLabel("Dự án")
-        lbl_header.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        lv.addWidget(lbl_header)
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
         
-        # Add/Delete buttons in horizontal layout
-        btn_row = QHBoxLayout()
-        self.btn_add=QPushButton("+ Thêm")
-        self.btn_add.setMinimumHeight(32)
-        self.btn_add.clicked.connect(self._add_project)
-        self.btn_del=QPushButton("− Xóa")
-        self.btn_del.setMinimumHeight(32)
-        self.btn_del.clicked.connect(self._del_project)
-        btn_row.addWidget(self.btn_add)
-        btn_row.addWidget(self.btn_del)
-        lv.addLayout(btn_row)
+        icon_label = QLabel("⚠️")
+        icon_label.setFont(QFont("Segoe UI", 48))
+        icon_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon_label)
         
-        # Project list
-        self.list=QListWidget()
-        self.list.currentTextChanged.connect(self._switch_project)
-        lv.addWidget(self.list)
+        title_label = QLabel(f"{panel_name} Not Available")
+        title_label.setFont(QFont("Segoe UI", 18, QFont.Bold))
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("color: #FF5722;")
+        layout.addWidget(title_label)
         
-        # Run all button at bottom
-        self.btn_run_all=QPushButton("CHẠY TẤT CẢ\n(THEO THỨ TỰ)")
-        self.btn_run_all.setMinimumHeight(50)
-        self.btn_run_all.setStyleSheet("QPushButton{background:#43a047;color:white;font-weight:700;font-size:13px;border-radius:8px;padding:10px;} QPushButton:hover{background:#2e7d32;}")
-        self.btn_run_all.clicked.connect(self._run_all_queue)
-        lv.addWidget(self.btn_run_all)
-        lv.addStretch(1)
-        split.addWidget(left)
+        if error_msg:
+            error_label = QLabel(f"Error: {error_msg}")
+            error_label.setFont(QFont("Segoe UI", 12))
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setWordWrap(True)
+            error_label.setStyleSheet("color: #666;")
+            layout.addWidget(error_label)
+        
+        help_label = QLabel(
+            "Please ensure all required files are in place:\n"
+            "- ui/image2video_panel_v7_complete.py\n"
+            "- ui/text2video_panel_v5_complete.py\n"
+            "- ui/video_ban_hang_v5_complete.py"
+        )
+        help_label.setFont(QFont("Courier New", 10))
+        help_label.setAlignment(Qt.AlignCenter)
+        help_label.setStyleSheet("color: #888; margin-top: 20px;")
+        layout.addWidget(help_label)
 
-        self.right_holder=QWidget(); self.right_layout=QVBoxLayout(self.right_holder); split.addWidget(self.right_holder)
-
-    def _add_project(self):
-        # Auto-generate project name
-        name=f"Project_{len(self._projects)+1}"
-        panel=ProjectPanel(name, self._default_root(), settings_provider=load_cfg, parent=self)
-        panel.project_completed.connect(self._on_project_completed)
-        panel.run_all_requested.connect(self._run_all_queue)
-        self._projects[name]=panel; self.list.addItem(name); self.list.setCurrentRow(self.list.count()-1)
-
-    def _del_project(self):
-        it=self.list.currentItem()
-        if not it: return
-        name=it.text()
-        panel=self._projects.pop(name, None)
-        if panel: panel.setParent(None); panel.deleteLater()
-        self.list.takeItem(self.list.currentRow())
-        self._maybe_auto_add_after_delete()
-
-    def _switch_project(self, name:str):
-        while self.right_layout.count():
-            item=self.right_layout.takeAt(0); w=item.widget()
-            if w: w.setParent(None)
-        panel=self._projects.get(name)
-        if panel: self.right_layout.addWidget(panel)
-
-    def _default_root(self):
-        cfg = load_cfg()
-        root = cfg.get("download_root")
-        if not root: root = os.path.join(os.path.expanduser("~"), "Downloads", "VeoProjects")
-        os.makedirs(root, exist_ok=True)
-        return root
-
-
-    def _ensure_default_project(self):
-        if not self._projects:
-            # Create a default project immediately so users don't need to click 'Thêm dự án'
-            self._add_project()
-
-    def _maybe_auto_add_after_delete(self):
-        if not self._projects:
-            self._ensure_default_project()
-
-    def _run_all_queue(self):
-        # Start from the first project in list
-        if not self._projects or self._queue_running:
-            return
-        self._queue_running = True
-        self.btn_run_all.setEnabled(False)
-        first = self.list.item(0).text() if self.list.count() else None
-        if first:
-            self.list.setCurrentRow(0)
-            panel = self._projects.get(first)
-            if panel: panel._run_seq()
-
-    def _on_project_completed(self, project_name: str):
-        if not self._queue_running:
-            # even nếu user chạy thủ công, vẫn tiếp tục dự án kế tiếp theo yêu cầu
-            self._queue_running = True
-        # find next
-        names = [self.list.item(i).text() for i in range(self.list.count())]
-        if project_name in names:
-            idx = names.index(project_name) + 1
-            if idx < len(names):
-                nxt = self._projects.get(names[idx])
-                if nxt:
-                    self.list.setCurrentRow(idx)
-                    nxt._run_seq()
-                    return
-        # no more
-        self._queue_running = False
-        self.btn_run_all.setEnabled(True)
 
 class MainWindow(QTabWidget):
+    """Main application window with all panels"""
+    
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Video Super Ultra ")
-        self.resize(1360,860)
-        # tabs
-        self.settings = SettingsPanel(self); self.addTab(self.settings, "Cài đặt")
-        self.projects = ProjectsPane(); self.addTab(self.projects, "Image2Video")
-
-        # --- v0.7.5 tabs ---
-        try:
-            from ui.text2video_panel import Text2VideoPane
-            self.text2v = Text2VideoPane(parent=self)
-            self.addTab(self.text2v, "Text2Video")
-        except Exception as e:
-            print("Text2Video tab error:", e)
-
-        try:
-            from ui.video_ban_hang_panel import VideoBanHangPanel
-            self.ads = VideoBanHangPanel(parent=self)
-            self.addTab(self.ads, "Video bán hàng")
-        except Exception as e:
-            print("Ads tab error:", e)
         
-        # Apply colorful tabs
-        self._apply_colorful_tabs()
+        # Window setup
+        self.setWindowTitle(f"Video Super Ultra v{get_version()}")
+        self.setMinimumSize(1280, 720)
+        self.resize(1440, 860)
+        
+        # Apply main tab styling
+        self.setStyleSheet(MAIN_TAB_STYLE)
+        
+        # Initialize tabs
+        self._init_tabs()
+        
+        # Load state
+        self._load_state()
+        
+        # Print initialization info
+        self._print_init_info()
     
-    def _apply_colorful_tabs(self):
-        """Apply distinct colors to each tab"""
-        tab_colors = [
-            "#2196F3",  # Blue - Cài đặt
-            "#4CAF50",  # Green - Image2Video
-            "#9C27B0",  # Purple - Text2Video
-            "#FF9800",  # Orange - Video bán hàng
+    def _init_tabs(self):
+        """Initialize all tabs"""
+        try:
+            # Tab 1: Settings
+            if SettingsPanel:
+                self.settings = SettingsPanel(self)
+            else:
+                self.settings = PlaceholderPanel("Settings Panel")
+            self.addTab(self.settings, "⚙️ Cài đặt")
+            
+            # Tab 2: Image2Video V7
+            if Image2VideoPanel:
+                try:
+                    self.image2video = Image2VideoPanel(self)
+                except Exception as e:
+                    print(f"❌ Error creating Image2Video panel: {e}")
+                    self.image2video = PlaceholderPanel("Image2Video V7", str(e))
+            else:
+                self.image2video = PlaceholderPanel("Image2Video V7")
+            self.addTab(self.image2video, "🖼️ Image2Video")
+            
+            # Tab 3: Text2Video V5
+            if Text2VideoPanel:
+                try:
+                    self.text2video = Text2VideoPanel(self)
+                except Exception as e:
+                    print(f"❌ Error creating Text2Video panel: {e}")
+                    self.text2video = PlaceholderPanel("Text2Video V5", str(e))
+            else:
+                self.text2video = PlaceholderPanel("Text2Video V5")
+            self.addTab(self.text2video, "📝 Text2Video")
+            
+            # Tab 4: Video Ads V5
+            if VideoAdsPanel:
+                try:
+                    self.video_ads = VideoAdsPanel(self)
+                except Exception as e:
+                    print(f"❌ Error creating Video Ads panel: {e}")
+                    self.video_ads = PlaceholderPanel("Video Ads V5", str(e))
+            else:
+                self.video_ads = PlaceholderPanel("Video Ads V5")
+            self.addTab(self.video_ads, "🛒 Video bán hàng")
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Initialization Error",
+                f"Failed to initialize application:\n\n{e}\n\n"
+                "Please check console for details."
+            )
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    def _print_init_info(self):
+        """Print initialization information"""
+        print("\n" + "=" * 70)
+        print("📊 PANEL STATUS")
+        print("=" * 70)
+        
+        panels = [
+            ("⚙️  Settings", self.settings),
+            ("🖼️  Image2Video", self.image2video),
+            ("📝 Text2Video", self.text2video),
+            ("🛒 Video Ads", self.video_ads)
         ]
         
-        # Note: PyQt5 QSS doesn't support :nth-child() well
-        # We apply colors via direct tabBar manipulation
-        # This is a simplified version - full implementation would use QProxyStyle
-        print("[INFO] Colorful tabs feature requires QProxyStyle - using default styling")
+        for name, panel in panels:
+            panel_type = type(panel).__name__
+            status = "✓" if not isinstance(panel, PlaceholderPanel) else "✗"
+            print(f"{status} {name:15} {panel_type}")
+        
+        print("=" * 70)
+        print(f"📅 Version: {get_version()}")
+        print(f"👤 User: chamnv-dev")
+        print(f"📆 Date: 2025-01-05")
+        print("=" * 70 + "\n")
+    
+    def _load_state(self):
+        """Load saved application state"""
+        try:
+            if cfg:
+                state = cfg.load()
+                last_tab = state.get('last_active_tab', 0)
+                
+                # Validate tab index
+                if 0 <= last_tab < self.count():
+                    self.setCurrentIndex(last_tab)
+                    print(f"✓ Restored last tab: {last_tab}")
+                else:
+                    print(f"⚠️ Invalid tab index: {last_tab}, using default")
+        except Exception as e:
+            print(f"⚠️ Could not load state: {e}")
+    
+    def closeEvent(self, event):
+        """Save state when closing"""
+        try:
+            if cfg:
+                state = cfg.load()
+                state['last_active_tab'] = self.currentIndex()
+                cfg.save(state)
+                print(f"✓ Saved state: tab {self.currentIndex()}")
+        except Exception as e:
+            print(f"⚠️ Could not save state: {e}")
+        
+        event.accept()
+
+
+def setup_application():
+    """Setup QApplication with proper settings"""
+    # High DPI support
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    
+    # Create application
+    app = QApplication(sys.argv)
+    app.setApplicationName("Video Super Ultra")
+    app.setApplicationDisplayName("Video Super Ultra V7")
+    app.setOrganizationName("chamnv-dev")
+    app.setOrganizationDomain("github.com/chamnv-dev")
+    
+    # Set default font
+    app.setFont(QFont("Segoe UI", 10))
+    
+    # Set application icon (if available)
+    try:
+        icon_path = os.path.join(
+            os.path.dirname(__file__),
+            "resources", "icon.png"
+        )
+        if os.path.exists(icon_path):
+            app.setWindowIcon(QIcon(icon_path))
+    except:
+        pass
+    
+    return app
+
 
 def main():
-    app=QApplication(sys.argv)
+    """Main entry point"""
+    print("\n" + "=" * 70)
+    print("🚀 VIDEO SUPER ULTRA V7 - STARTING")
+    print("=" * 70)
+    print(f"📅 Version: {get_version()}")
+    print(f"👤 User: chamnv-dev")
+    print(f"📆 Date: 2025-01-05 02:37:13 UTC")
+    print(f"🐍 Python: {sys.version.split()[0]}")
+    print(f"📂 Working Directory: {os.getcwd()}")
+    print("=" * 70 + "\n")
     
-    # Apply light Material Design theme
+    # Setup application
+    app = setup_application()
+    
+    # Apply theme
     try:
-        from ui.styles.light_theme import apply_light_theme
-        apply_light_theme(app)
+        apply_theme(app)
+        print("✓ Applied theme\n")
     except Exception as e:
-        print(f"Warning: Could not apply light theme: {e}")
+        print(f"⚠️ Could not apply theme: {e}\n")
     
-    w=MainWindow(); w.show(); sys.exit(app.exec_())
+    # Create and show main window
+    try:
+        window = MainWindow()
+        window.show()
+        
+        print("=" * 70)
+        print("✅ APPLICATION STARTED SUCCESSFULLY!")
+        print("=" * 70 + "\n")
+        
+        # Start event loop
+        exit_code = app.exec_()
+        
+        print("\n" + "=" * 70)
+        print("👋 APPLICATION CLOSED")
+        print("=" * 70 + "\n")
+        
+        sys.exit(exit_code)
+        
+    except Exception as e:
+        print("\n" + "=" * 70)
+        print("❌ CRITICAL ERROR")
+        print("=" * 70)
+        print(f"Error: {e}\n")
+        
+        import traceback
+        traceback.print_exc()
+        
+        QMessageBox.critical(
+            None,
+            "Critical Error",
+            f"Application failed to start:\n\n{e}\n\n"
+            "Please check console for details."
+        )
+        
+        sys.exit(1)
 
-if __name__=='__main__':
+
+if __name__ == "__main__":
     main()
