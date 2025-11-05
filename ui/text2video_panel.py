@@ -1510,14 +1510,18 @@ class Text2VideoPane(QWidget):
                 caption_text = "\n\n".join(caption_parts)
                 widget_data["caption"].setPlainText(caption_text)
                 
-                # Set hashtags
+                # Set hashtags with improved type handling
                 hashtags = version_data.get('hashtags', [])
                 if hashtags:
                     if isinstance(hashtags, list):
-                        hashtags_text = " ".join(hashtags)
+                        hashtags_text = " ".join(str(tag) for tag in hashtags)
+                    elif isinstance(hashtags, str):
+                        hashtags_text = hashtags
                     else:
-                        hashtags_text = str(hashtags)
-                    widget_data["hashtags"].setPlainText(hashtags_text)
+                        hashtags_text = ""  # Skip invalid types
+                    
+                    if hashtags_text:
+                        widget_data["hashtags"].setPlainText(hashtags_text)
         
         # Switch to social tab to show result (optional)
         # self.result_tabs.setCurrentIndex(4)  # Tab 5 is Social
