@@ -4,6 +4,8 @@ import os
 import re
 import shutil
 import subprocess
+import datetime
+from xml.sax.saxutils import escape as xml_escape
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -115,15 +117,20 @@ def _build_setting_details(location_context):
         return f"{location_context}. {base_details}"
     return base_details
 
-def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str, ratio_str:str, style:str, seconds:int=8, copies:int=1, resolution_hint:str=None, character_bible=None, enhanced_bible=None, voice_settings=None, location_context:str=None):
+def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str, ratio_str:str, style:str, seconds:int=8, copies:int=1, resolution_hint:str=None, character_bible=None, enhanced_bible=None, voice_settings=None, location_context:str=None, tts_provider:str=None, voice_id:str=None, voice_name:str=None, domain:str=None, topic:str=None, quality:str=None):
     """
-    Strict prompt JSON schema:
-    - objective/persona/constraints/assets/hard_locks/character_details/setting_details/key_action/camera_direction/audio/graphics/negatives/generation
+    Enhanced prompt JSON schema with comprehensive metadata:
+    - Full persona with expertise_context
+    - Complete audio object with detailed voiceover (TTS provider, voice details, prosody, ElevenLabs settings) and background_music
+    - domain_context object with domain, topic, system_prompt
+    - metadata object with creation info and optimization settings
     - bilingual localization (vi + target)
     
     Part D: Now supports enhanced_bible (CharacterBible object) for detailed character consistency
     Part E: Now supports location_context for maintaining consistent backgrounds across scenes
+    Part F: Enhanced audio, domain_context, and metadata fields (Issue #5)
     """
+    
     ratio_map = {
         '16:9': ('1920x1080', 'VIDEO_ASPECT_RATIO_LANDSCAPE'),
         '21:9': ('2560x1080', 'VIDEO_ASPECT_RATIO_LANDSCAPE'),
@@ -192,31 +199,110 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
     # Part D: NEVER truncate voiceover - prompt optimizer will handle this
     # if len(vo_text)>240: vo_text = vo_text[:240] + "…"
 
-    # Build voiceover config with prosody settings
+    # Part F: Build comprehensive voiceover config with all TTS details
+    speaking_style = voice_settings.get("speaking_style", "storytelling") if voice_settings else "storytelling"
+    rate_multiplier = voice_settings.get("rate_multiplier", 1.0) if voice_settings else 1.0
+    pitch_adjust = voice_settings.get("pitch_adjust", 0) if voice_settings else 0
+    expressiveness = voice_settings.get("expressiveness", 0.5) if voice_settings else 0.5
+    
+    # Get style info for descriptions
+    try:
+        from services.voice_options import get_style_info, get_elevenlabs_settings, SPEAKING_STYLES
+        style_info = get_style_info(speaking_style)
+        style_description = style_info.get("description", "")
+        
+        # Get ElevenLabs settings (using voice adjustments if available from voice_settings)
+        # Note: ElevenLabs adjustments would come from separate UI controls, defaulting to 0.0 for now
+        elevenlabs_settings = get_elevenlabs_settings(speaking_style, 0.0, 0.0)
+    except:
+        style_description = ""
+        elevenlabs_settings = {
+            "stability": 0.5,
+            "similarity_boost": 0.75,
+            "style": 0.5,
+            "use_speaker_boost": True
+        }
+    
+    # Build prosody descriptions
+    rate_description = "normal speed"
+    if rate_multiplier < 0.9:
+        rate_description = "slow, deliberate pace"
+    elif rate_multiplier > 1.1:
+        rate_description = "fast, energetic pace"
+    
+    pitch_description = "neutral pitch"
+    if pitch_adjust < -2:
+        pitch_description = "lower, deeper voice"
+    elif pitch_adjust > 2:
+        pitch_description = "higher, brighter voice"
+    
+    expressiveness_description = "moderate emotion"
+    if expressiveness < 0.3:
+        expressiveness_description = "flat, monotone delivery"
+    elif expressiveness > 0.7:
+        expressiveness_description = "highly expressive, dynamic delivery"
+    
     voiceover_config = {
         "language": lang_code or "vi",
-        "voice_hint": "neutral_narrative",
-        "pace": 1.0,
-        "text": vo_text
+        "tts_provider": tts_provider or "google",
+        "voice_id": voice_id or "",
+        "voice_name": voice_name or "",
+        "voice_description": f"TTS voice for {lang_code or 'vi'} language content",
+        "speaking_style": speaking_style,
+        "style_description": style_description,
+        "text": vo_text,
+        "ssml_markup": f'<speak><prosody rate="{int(rate_multiplier * 100)}%" pitch="{pitch_adjust:+d}st">{xml_escape(vo_text)}</prosody></speak>',
+        "prosody": {
+            "rate": rate_multiplier,
+            "rate_description": rate_description,
+            "pitch": pitch_adjust,
+            "pitch_description": pitch_description,
+            "expressiveness": expressiveness,
+            "expressiveness_description": expressiveness_description
+        },
+        "elevenlabs_settings": elevenlabs_settings
     }
     
-    # Add voice prosody settings if provided
-    if voice_settings:
-        voiceover_config.update({
-            "speaking_style": voice_settings.get("speaking_style", "storytelling"),
-            "rate_multiplier": voice_settings.get("rate_multiplier", 1.0),
-            "pitch_adjust": voice_settings.get("pitch_adjust", 0),
-            "expressiveness": voice_settings.get("expressiveness", 0.5)
-        })
+    # Part F: Build domain context
+    domain_context = {}
+    if domain and topic:
+        try:
+            from services.domain_prompts import get_system_prompt, build_expert_intro
+            system_prompt = get_system_prompt(domain, topic)
+            expertise_intro = build_expert_intro(domain, topic, lang_code or "vi")
+            
+            domain_context = {
+                "domain": domain,
+                "topic": topic,
+                "expertise_intro": expertise_intro,
+                "system_prompt": system_prompt
+            }
+        except Exception as e:
+            import sys
+            print(f"[WARN] Domain context failed: {e}", file=sys.stderr)
+    
+    # Part F: Enhanced persona with expertise context
+    persona = {
+        "role": "Creative Video Director",
+        "tone": "Cinematic and evocative",
+        "knowledge_level": "Expert in visual storytelling"
+    }
+    if domain_context:
+        persona["expertise_context"] = domain_context.get("expertise_intro", "")
+
+    # Part F: Build metadata
+    metadata = {
+        "created_by": "v3-text2video-panel",
+        "creation_date": datetime.datetime.now().isoformat(),
+        "video_type": "short-form",
+        "target_audience": "general",
+        "platform_optimization": ["youtube_shorts", "tiktok", "instagram_reels"]
+    }
 
     data = {
         "scene_id": f"s{scene_index:02d}",
         "objective": "Generate a short video clip for this scene based on screenplay and prompts.",
-        "persona": {
-            "role": "Creative Video Director",
-            "tone": "Cinematic and evocative",
-            "knowledge_level": "Expert in visual storytelling"
-        },
+        "persona": persona,
         "constraints": {
             "duration_seconds": seconds,
             "aspect_ratio": ratio_str,
@@ -232,10 +318,20 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         "camera_direction": segments,
         "audio": {
             "voiceover": voiceover_config,
-            "music_bed": "subtle, minimal, non-intrusive"
+            "background_music": {
+                "type": "ambient",
+                "description": "Subtle background music that complements the scene mood",
+                "volume": 0.3,
+                "mood": style.lower() if style else "neutral"
+            }
         },
         "graphics": {
-            "subtitles": { "enabled": True, "language": lang_code or "vi", "style": "clean small caps, bottom-safe" },
+            "subtitles": { 
+                "enabled": True, 
+                "language": lang_code or "vi", 
+                "style": "clean small caps, bottom-safe",
+                "animation": "fade-in"
+            },
             "on_screen_text": []
         },
         "negatives": [
@@ -244,9 +340,25 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
             "No brand logos unless present in references.",
             "No unrealistic X-ray views; use graphic overlays only."
         ],
-        "generation": { "seed": __import__("random").randint(0, 2**31-1), "copies": copies },
-        "localization": { "vi": {"prompt": (desc_vi or '').strip()}, "tgt": {"lang": lang_code, "prompt": (desc_tgt or desc_vi or '').strip()} }
+        "generation": { 
+            "seed": __import__("random").randint(0, 2**31-1), 
+            "copies": copies,
+            "quality": quality or "standard",
+            "consistency_mode": "strict"
+        },
+        "localization": { 
+            "vi": {"prompt": (desc_vi or '').strip()}, 
+            (lang_code if lang_code else "en"): {"prompt": (desc_tgt or desc_vi or '').strip()}
+        }
     }
+    
+    # Add domain_context if available
+    if domain_context:
+        data["domain_context"] = domain_context
+    
+    # Add metadata
+    data["metadata"] = metadata
+    
     return data
 
 class _Worker(QObject):

@@ -95,7 +95,7 @@ class StoryboardView(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("QScrollArea { background: #FAFAFA; border: none; }")
+        scroll.setStyleSheet("QScrollArea { background: white; border: none; }")
         
         container = QWidget()
         self.grid_layout = QGridLayout(container)
@@ -995,13 +995,27 @@ class Text2VideoPanelV5(QWidget):
                     voice_settings = self.get_voice_settings()
                     location_ctx = extract_location_context(sc) if extract_location_context else None
                     
+                    # Get additional parameters for enhanced prompt JSON
+                    tts_provider = self.cb_tts_provider.currentData()
+                    voice_id = self.ed_custom_voice.text().strip() or self.cb_voice.currentData()
+                    voice_name = self.cb_voice.currentText() if not self.ed_custom_voice.text().strip() else ""
+                    domain = self.cb_domain.currentData() or None
+                    topic = self.cb_topic.currentData() or None
+                    quality = self.cb_quality.currentText() if self.cb_quality.isVisible() else None
+                    
                     j = build_prompt_json(
                         i, sc.get("prompt_vi", ""), sc.get("prompt_tgt", ""),
                         lang_code, self.cb_ratio.currentText(),
                         self.cb_style.currentText(),
                         character_bible=character_bible_basic,
                         voice_settings=voice_settings,
-                        location_context=location_ctx
+                        location_context=location_ctx,
+                        tts_provider=tts_provider,
+                        voice_id=voice_id,
+                        voice_name=voice_name,
+                        domain=domain,
+                        topic=topic,
+                        quality=quality
                     )
                     
                     with open(
@@ -1066,12 +1080,26 @@ class Text2VideoPanelV5(QWidget):
                     location_ctx = extract_location_context(scene_list[r])
             
             if build_prompt_json:
+                # Get additional parameters for enhanced prompt JSON
+                tts_provider = self.cb_tts_provider.currentData()
+                voice_id = self.ed_custom_voice.text().strip() or self.cb_voice.currentData()
+                voice_name = self.cb_voice.currentText() if not self.ed_custom_voice.text().strip() else ""
+                domain = self.cb_domain.currentData() or None
+                topic = self.cb_topic.currentData() or None
+                quality_text = self.cb_quality.currentText() if self.cb_quality.isVisible() else None
+                
                 j = build_prompt_json(
                     r + 1, vi, tgt, lang_code, ratio_key, style,
                     character_bible=character_bible_basic,
                     enhanced_bible=self._character_bible,
                     voice_settings=voice_settings,
-                    location_context=location_ctx
+                    location_context=location_ctx,
+                    tts_provider=tts_provider,
+                    voice_id=voice_id,
+                    voice_name=voice_name,
+                    domain=domain,
+                    topic=topic,
+                    quality=quality_text
                 )
                 scenes.append({
                     "prompt": json.dumps(j, ensure_ascii=False, indent=2),
@@ -1111,40 +1139,39 @@ class Text2VideoPanelV5(QWidget):
         self._run_in_thread("video", payload)
     
     def _render_card_text(self, scene:int):
-        """Render card text with HTML formatting - Issue #7"""
+        """Render card text with plain text formatting - Fixed Issue #3"""
         st = self._cards_state.get(scene, {})
         vi = st.get('vi','').strip()
         tgt = st.get('tgt','').strip()
         
-        # Bold blue title (14px)
-        lines = [f'<b style="font-size:14px; color:#1E88E5;">🎬 Cảnh {scene}</b>']
+        # Plain text title with emoji
+        lines = [f'🎬 Cảnh {scene}']
         lines.append('━━━━━━━━━━━━━━━━━━━━')
         
-        # Prompt (11px, max 150 chars)
+        # Prompt (max 150 chars)
         if tgt or vi:
-            lines.append('<span style="font-size:11px; font-weight:600;">📝 PROMPT:</span>')
+            lines.append('📝 PROMPT:')
             prompt = (tgt or vi)[:150]
             if len(tgt or vi) > 150:
                 prompt += '...'
-            lines.append(f'<span style="font-size:11px; color:#424242;">{prompt}</span>')
+            lines.append(prompt)
         
         # Videos
         vids = st.get('videos', {})
         if vids:
             lines.append('')
-            lines.append('<span style="font-size:11px; font-weight:600;">🎥 VIDEO:</span>')
+            lines.append('🎥 VIDEO:')
             for copy, info in sorted(vids.items()):
                 status = info.get('status', '?')
-                tag = f'<span style="font-size:10px; color:#616161;">  #{copy}: {status}'
+                tag = f'  #{copy}: {status}'
                 if info.get('completed_at'):
                     tag += f' — {info["completed_at"]}'
-                tag += '</span>'
                 lines.append(tag)
                 
                 if info.get('path'):
-                    lines.append(f'<span style="font-size:10px; color:#757575;">  📥 {os.path.basename(info["path"])}</span>')
+                    lines.append(f'  📥 {os.path.basename(info["path"])}')
         
-        return '<br>'.join(lines)
+        return '\n'.join(lines)
         
     def _on_job_card(self, data: dict):
         """Update job card with video status"""
@@ -1237,12 +1264,26 @@ class Text2VideoPanelV5(QWidget):
                 location_ctx = extract_location_context(scene_list[row])
         
         if build_prompt_json:
+            # Get additional parameters for enhanced prompt JSON
+            tts_provider = self.cb_tts_provider.currentData()
+            voice_id = self.ed_custom_voice.text().strip() or self.cb_voice.currentData()
+            voice_name = self.cb_voice.currentText() if not self.ed_custom_voice.text().strip() else ""
+            domain = self.cb_domain.currentData() or None
+            topic = self.cb_topic.currentData() or None
+            quality = self.cb_quality.currentText() if self.cb_quality.isVisible() else None
+            
             j = build_prompt_json(
                 row + 1, vi, tgt, lang_code,
                 self.cb_ratio.currentText(),
                 self.cb_style.currentText(),
                 voice_settings=voice_settings,
-                location_context=location_ctx
+                location_context=location_ctx,
+                tts_provider=tts_provider,
+                voice_id=voice_id,
+                voice_name=voice_name,
+                domain=domain,
+                topic=topic,
+                quality=quality
             )
             
             try:
