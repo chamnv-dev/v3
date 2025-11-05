@@ -210,7 +210,8 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         style_info = get_style_info(speaking_style)
         style_description = style_info.get("description", "")
         
-        # Get ElevenLabs settings
+        # Get ElevenLabs settings (using voice adjustments if available from voice_settings)
+        # Note: ElevenLabs adjustments would come from separate UI controls, defaulting to 0.0 for now
         elevenlabs_settings = get_elevenlabs_settings(speaking_style, 0.0, 0.0)
     except:
         style_description = ""
@@ -249,7 +250,7 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         "speaking_style": speaking_style,
         "style_description": style_description,
         "text": vo_text,
-        "ssml_markup": f'<speak><prosody rate="{rate_multiplier}" pitch="{pitch_adjust:+d}st">{vo_text}</prosody></speak>',
+        "ssml_markup": f'<speak><prosody rate="{int(rate_multiplier * 100)}%" pitch="{pitch_adjust:+d}%">{vo_text}</prosody></speak>',
         "prosody": {
             "rate": rate_multiplier,
             "rate_description": rate_description,
@@ -346,7 +347,7 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         },
         "localization": { 
             "vi": {"prompt": (desc_vi or '').strip()}, 
-            "en": {"prompt": (desc_tgt or desc_vi or '').strip()} if lang_code == "en" else {"prompt": ""}
+            lang_code: {"prompt": (desc_tgt or desc_vi or '').strip()}
         }
     }
     
