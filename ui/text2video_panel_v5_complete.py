@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QShortcut, QSlider, QSpinBox, QTableWidget,
     QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget, QTabWidget,
-    QFileDialog, QFrame
+    QFileDialog, QFrame, QApplication  # Added for clipboard
 )
 
 # Original imports
@@ -1405,9 +1405,16 @@ class Text2VideoPanelV5(QWidget):
         self.social_content_layout.addWidget(group)
     
     def _copy_to_clipboard(self, text: str):
-        """Copy text to clipboard"""
-        QApplication.clipboard().setText(text)
-        self._append_log(f"[INFO] ✓ Đã copy vào clipboard ({len(text)} ký tự)")
+        """Copy text to clipboard with error handling"""
+        try:
+            clipboard = QApplication.clipboard()
+            if clipboard:
+                clipboard.setText(text)
+                self._append_log(f"[INFO] ✓ Đã copy vào clipboard ({len(text)} ký tự)")
+            else:
+                self._append_log("[WARN] Clipboard không khả dụng")
+        except Exception as e:
+            self._append_log(f"[ERROR] Lỗi copy clipboard: {e}")
     
     def _display_thumbnail_design(self, thumbnail_data):
         """Display thumbnail design"""

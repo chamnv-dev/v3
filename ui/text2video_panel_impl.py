@@ -10,6 +10,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from services.google.labs_flow_client import DEFAULT_PROJECT_ID, LabsFlowClient
 from services.utils.video_downloader import VideoDownloader
 from utils import config as cfg
+from utils.filename_sanitizer import sanitize_project_name, sanitize_filename
 
 # Backward compatibility
 LabsClient = LabsFlowClient
@@ -310,9 +311,8 @@ class _Worker(QObject):
             self.log.emit("[WARN] Chưa cấu hình thư mục tải về trong Cài đặt, dùng Downloads mặc định.")
         title = p["project"] or data.get("title_vi") or data.get("title_tgt") or "Project"
         os.makedirs(root, exist_ok=True)
-        # Sanitize title to avoid invalid path characters
-        safe_title = title.replace(':', ' -').replace('/', '_').replace('\\', '_')
-        safe_title = re.sub(r'[<>"|?*]', '', safe_title).strip() or "Project"
+        # Sanitize title to avoid invalid path characters and Vietnamese characters
+        safe_title = sanitize_project_name(title)
         prj_dir = os.path.join(root, safe_title); os.makedirs(prj_dir, exist_ok=True)
         dir_script = os.path.join(prj_dir, "01_KichBan"); os.makedirs(dir_script, exist_ok=True)
         dir_prompts= os.path.join(prj_dir, "02_Prompts"); os.makedirs(dir_prompts, exist_ok=True)
@@ -508,7 +508,9 @@ class _Worker(QObject):
                         self.log.emit(f"[SUCCESS] Scene {scene} Copy {copy_num}: Video ready!")
                         
                         # Download logic - Always download videos
-                        fn = f"{title}_scene{scene}_copy{copy_num}.mp4"
+                        # Sanitize filename to handle Vietnamese characters and special characters
+                        raw_fn = f"{title}_scene{scene}_copy{copy_num}.mp4"
+                        fn = sanitize_filename(raw_fn)
                         fp = os.path.join(dir_videos, fn)
                         
                         self.log.emit(f"[INFO] Downloading scene {scene} copy {copy_num}...")
