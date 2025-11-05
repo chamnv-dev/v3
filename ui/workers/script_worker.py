@@ -2,6 +2,8 @@
 """
 Script Worker - Non-blocking script generation using QThread
 """
+import json
+import sys
 import traceback
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -30,8 +32,6 @@ class ScriptWorker(QThread):
 
     def run(self):
         """Execute script generation in background thread"""
-        import json
-        
         try:
             self.progress.emit("Đang tạo kịch bản...")
 
@@ -55,14 +55,14 @@ class ScriptWorker(QThread):
             )
             self.error.emit(error_msg)
             # Log full traceback for debugging
-            print("[ERROR] JSONDecodeError in ScriptWorker:", file=__import__('sys').stderr)
+            print("[ERROR] JSONDecodeError in ScriptWorker:", file=sys.stderr)
             traceback.print_exc()
             
         except ValueError as e:
             # Handle empty or invalid responses
             error_msg = f"ValueError: {str(e)}\n\nKhắc phục: Kiểm tra API key và kết nối mạng."
             self.error.emit(error_msg)
-            print("[ERROR] ValueError in ScriptWorker:", file=__import__('sys').stderr)
+            print("[ERROR] ValueError in ScriptWorker:", file=sys.stderr)
             traceback.print_exc()
             
         except Exception as e:
@@ -71,5 +71,5 @@ class ScriptWorker(QThread):
             error_msg = f"{error_type}: {str(e)}"
             self.error.emit(error_msg)
             # Log full traceback for debugging
-            print(f"[ERROR] {error_type} in ScriptWorker:", file=__import__('sys').stderr)
+            print(f"[ERROR] {error_type} in ScriptWorker:", file=sys.stderr)
             traceback.print_exc()

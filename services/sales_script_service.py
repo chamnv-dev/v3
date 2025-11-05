@@ -19,8 +19,6 @@ def parse_llm_response_safe(response_text: str, source: str = "LLM") -> Dict[str
     Raises:
         json.JSONDecodeError: If all parsing strategies fail
     """
-    import codecs
-    
     if not response_text or not response_text.strip():
         raise ValueError(f"Empty response from {source}")
     

@@ -7,6 +7,7 @@ from PyQt5.Qt import QDesktopServices
 from PyQt5.QtCore import QLocale, QSize, Qt, QThread, QUrl
 from PyQt5.QtGui import QColor, QKeySequence
 from PyQt5.QtWidgets import (
+    QApplication,
     QScrollArea,
     QCheckBox,
     QComboBox,
@@ -790,8 +791,6 @@ class Text2VideoPane(QWidget):
         Args:
             content_type: "caption", "hashtags", or "all"
         """
-        from PyQt5.QtWidgets import QApplication
-        
         clipboard = QApplication.clipboard()
         
         if content_type == "caption":
