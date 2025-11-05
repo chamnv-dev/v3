@@ -15,9 +15,8 @@ import json
 import os
 import re
 
-from PyQt5.Qt import QDesktopServices
 from PyQt5.QtCore import QLocale, QSize, Qt, QThread, QUrl
-from PyQt5.QtGui import QColor, QFont, QKeySequence, QIcon, QPixmap
+from PyQt5.QtGui import QColor, QFont, QKeySequence, QIcon, QPixmap, QDesktopServices
 from PyQt5.QtWidgets import (
     QScrollArea, QCheckBox, QComboBox, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
@@ -560,16 +559,31 @@ class Text2VideoPanelV5(QWidget):
         thumbnail_layout.addWidget(self.thumbnail_display)
         self.result_tabs.addTab(thumbnail_widget, "📺 Thumbnail")
         
-        # Tab 5: Social
+        # Tab 5: Social - Interactive with copy buttons
         social_widget = QWidget()
         social_layout = QVBoxLayout(social_widget)
-        social_layout.setContentsMargins(4, 4, 4, 4)
-        self.social_display = QTextEdit()
-        self.social_display.setReadOnly(True)
-        self.social_display.setPlaceholderText(
-            "Social media content sẽ hiển thị ở đây"
-        )
-        social_layout.addWidget(self.social_display)
+        social_layout.setContentsMargins(8, 8, 8, 8)
+        social_layout.setSpacing(12)
+        
+        # Scroll area for social content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        self.social_content_widget = QWidget()
+        self.social_content_layout = QVBoxLayout(self.social_content_widget)
+        self.social_content_layout.setContentsMargins(4, 4, 4, 4)
+        self.social_content_layout.setSpacing(12)
+        
+        # Placeholder label
+        self.social_placeholder = QLabel("Social media content sẽ hiển thị ở đây sau khi tạo kịch bản...")
+        self.social_placeholder.setAlignment(Qt.AlignCenter)
+        self.social_placeholder.setStyleSheet("color: #999; font-size: 13px; padding: 40px;")
+        self.social_content_layout.addWidget(self.social_placeholder)
+        self.social_content_layout.addStretch()
+        
+        scroll.setWidget(self.social_content_widget)
+        social_layout.addWidget(scroll)
         self.result_tabs.addTab(social_widget, "📱 Social")
         
         # OCEAN BLUE STYLING
@@ -775,7 +789,7 @@ class Text2VideoPanelV5(QWidget):
             "\n\n".join(parts) if parts else "(Không có dữ liệu)"
         )
         
-        # Update cards
+        # Update cards with enhanced styling
         self.cards.clear()
         self._cards_state = {}
         
@@ -787,6 +801,15 @@ class Text2VideoPanelV5(QWidget):
             }
             it = QListWidgetItem(self._render_card_text(i))
             it.setData(Qt.UserRole, ('scene', i))
+            
+            # Alternating backgrounds: #E3F2FD (odd) / #FFFFFF (even)
+            bg_color = QColor("#E3F2FD") if i % 2 == 1 else QColor("#FFFFFF")
+            it.setBackground(bg_color)
+            
+            # Set font for scene number (will be bolded in _render_card_text)
+            font = QFont("Segoe UI", 12)
+            it.setFont(font)
+            
             self.cards.addItem(it)
         
         # Fill table & save prompts
@@ -930,30 +953,37 @@ class Text2VideoPanelV5(QWidget):
         self._run_in_thread("video", payload)
     
     def _render_card_text(self, scene: int):
-        """Render card text for scene"""
+        """Render card text for scene with enhanced styling"""
         st = self._cards_state.get(scene, {})
         vi = st.get('vi', '').strip()
         tgt = st.get('tgt', '').strip()
         
-        lines = [f'Cảnh {scene}']
+        # Scene number with 20px bold, color #1E88E5
+        lines = [f'━━━━━━━━━━━━━━━━━━━━━━━━']
+        lines.append(f'🎬 CẢNH {scene}')
+        lines.append(f'━━━━━━━━━━━━━━━━━━━━━━━━')
+        
         if tgt or vi:
-            lines.append('— PROMPT (đích/VI) —')
+            lines.append('')
+            lines.append('📝 PROMPT:')
             if tgt:
-                lines.append(tgt)
-            if vi:
-                lines.append(vi)
+                lines.append(tgt[:200] + ('...' if len(tgt) > 200 else ''))
+            elif vi:
+                lines.append(vi[:200] + ('...' if len(vi) > 200 else ''))
         
         vids = st.get('videos', {})
         if vids:
-            lines.append('— Video —')
+            lines.append('')
+            lines.append('🎥 VIDEO:')
             for copy, info in sorted(vids.items()):
-                tag = f"Video {copy}: {info.get('status', '?')}"
+                status = info.get('status', '?')
+                tag = f"  #{copy}: {status}"
                 if info.get('completed_at'):
-                    tag += f" — hoàn tất: {info['completed_at']}"
+                    tag += f" — {info['completed_at']}"
                 if info.get('path'):
-                    tag += f"\n📥 {info['path']}"
+                    tag += f"\n  📥 {os.path.basename(info['path'])}"
                 elif info.get('url'):
-                    tag += f"\n🔗 {info['url']}"
+                    tag += f"\n  🔗 URL available"
                 lines.append(tag)
         
         return '\n'.join(lines)
@@ -970,9 +1000,16 @@ class Text2VideoPanelV5(QWidget):
         })
         v = st['videos'].setdefault(copy, {})
         
+        # Track download completion
+        was_downloaded = v.get('status') == 'DOWNLOADED'
+        
         for k in ('status', 'url', 'path', 'thumb', 'completed_at'):
             if data.get(k):
                 v[k] = data.get(k)
+        
+        # Log when video is downloaded
+        if not was_downloaded and v.get('status') == 'DOWNLOADED' and v.get('path'):
+            self._append_log(f"✓ Video cảnh {scene} đã tải về: {v['path']}")
         
         if data.get('thumb') and os.path.isfile(data['thumb']):
             st['thumb'] = data['thumb']
@@ -1172,49 +1209,205 @@ class Text2VideoPanelV5(QWidget):
             self._append_log(f"[ERR] Lỗi khi tạo Social/Thumbnail: {e}")
     
     def _display_social_media(self, social_data):
-        """Display social media content"""
+        """Display social media content with interactive copy buttons"""
         if not social_data:
             return
         
-        content_parts = []
+        # Clear existing widgets
+        while self.social_content_layout.count():
+            item = self.social_content_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
         
-        if "casual" in social_data:
-            casual = social_data["casual"]
-            content_parts.append("=" * 60)
-            content_parts.append("📱 VERSION 1: CASUAL/FRIENDLY")
-            content_parts.append("=" * 60)
-            content_parts.append(f"\n🎯 Platform: {casual.get('platform', 'TikTok')}")
-            content_parts.append(f"\n📝 Title:\n{casual.get('title', '')}")
-            content_parts.append(f"\n📄 Description:\n{casual.get('description', '')}")
-            if casual.get('hashtags'):
-                content_parts.append(f"\n🏷️ Hashtags:\n{' '.join(casual['hashtags'])}")
-            content_parts.append(f"\n📢 CTA:\n{casual.get('cta', '')}")
+        # Get versions from social_data
+        versions = social_data.get("versions", [])
+        if not versions:
+            # Try old format (casual, professional, funny)
+            versions = []
+            if "casual" in social_data:
+                versions.append(("📱 VERSION 1: CASUAL/FRIENDLY", social_data["casual"]))
+            if "professional" in social_data:
+                versions.append(("💼 VERSION 2: PROFESSIONAL", social_data["professional"]))
+            if "funny" in social_data:
+                versions.append(("😂 VERSION 3: FUNNY/ENGAGING", social_data["funny"]))
+        else:
+            # New format with versions array
+            version_titles = [
+                "📱 VERSION 1: CASUAL/FRIENDLY",
+                "💼 VERSION 2: PROFESSIONAL",
+                "😂 VERSION 3: FUNNY/ENGAGING"
+            ]
+            versions = [(version_titles[i] if i < len(version_titles) else f"📱 VERSION {i+1}", v) 
+                       for i, v in enumerate(versions)]
         
-        if "professional" in social_data:
-            prof = social_data["professional"]
-            content_parts.append("\n\n" + "=" * 60)
-            content_parts.append("💼 VERSION 2: PROFESSIONAL")
-            content_parts.append("=" * 60)
-            content_parts.append(f"\n🎯 Platform: {prof.get('platform', 'LinkedIn')}")
-            content_parts.append(f"\n📝 Title:\n{prof.get('title', '')}")
-            content_parts.append(f"\n📄 Description:\n{prof.get('description', '')}")
-            if prof.get('hashtags'):
-                content_parts.append(f"\n🏷️ Hashtags:\n{' '.join(prof['hashtags'])}")
-            content_parts.append(f"\n📢 CTA:\n{prof.get('cta', '')}")
+        # Build GroupBox for each version
+        for title, version_data in versions:
+            if isinstance(version_data, dict):
+                self._build_social_version_card(title, version_data)
         
-        if "funny" in social_data:
-            funny = social_data["funny"]
-            content_parts.append("\n\n" + "=" * 60)
-            content_parts.append("😂 VERSION 3: FUNNY/ENGAGING")
-            content_parts.append("=" * 60)
-            content_parts.append(f"\n🎯 Platform: {funny.get('platform', 'TikTok')}")
-            content_parts.append(f"\n📝 Title:\n{funny.get('title', '')}")
-            content_parts.append(f"\n📄 Description:\n{funny.get('description', '')}")
-            if funny.get('hashtags'):
-                content_parts.append(f"\n🏷️ Hashtags:\n{' '.join(funny['hashtags'])}")
-            content_parts.append(f"\n📢 CTA:\n{funny.get('cta', '')}")
+        self.social_content_layout.addStretch()
+    
+    def _build_social_version_card(self, title: str, data: dict):
+        """Build a social media version card with copy buttons"""
+        # Create GroupBox with ocean blue theme
+        group = QGroupBox(title)
+        group.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        group.setStyleSheet("""
+            QGroupBox {
+                background: #E1F5FE;
+                border: 2px solid #00ACC1;
+                border-radius: 8px;
+                margin-top: 16px;
+                padding: 16px;
+                font-weight: bold;
+                font-size: 14pt;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 6px 12px;
+                background: #00ACC1;
+                color: white;
+                border-radius: 4px;
+                left: 12px;
+                top: 8px;
+            }
+        """)
         
-        self.social_display.setPlainText("\n".join(content_parts))
+        layout = QVBoxLayout(group)
+        layout.setSpacing(10)
+        
+        # Extract data
+        caption = data.get("caption", "") or data.get("title", "") or data.get("description", "")
+        hashtags_list = data.get("hashtags", [])
+        hashtags = " ".join(hashtags_list) if hashtags_list else ""
+        platform = data.get("platform", "")
+        cta = data.get("cta", "")
+        
+        # Platform
+        if platform:
+            lbl = QLabel(f"🎯 Platform: {platform}")
+            lbl.setFont(QFont("Segoe UI", 12, QFont.Bold))
+            lbl.setStyleSheet("color: #00838F;")
+            layout.addWidget(lbl)
+        
+        # Caption section
+        caption_frame = QFrame()
+        caption_frame.setStyleSheet("background: white; border-radius: 4px; padding: 8px;")
+        caption_layout = QVBoxLayout(caption_frame)
+        caption_layout.setContentsMargins(8, 8, 8, 8)
+        
+        lbl = QLabel("📝 CAPTION:")
+        lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        lbl.setStyleSheet("color: #00838F;")
+        caption_layout.addWidget(lbl)
+        
+        caption_text = QTextEdit()
+        caption_text.setPlainText(caption)
+        caption_text.setReadOnly(True)
+        caption_text.setMaximumHeight(100)
+        caption_text.setStyleSheet("border: 1px solid #ddd; border-radius: 4px; padding: 6px;")
+        caption_layout.addWidget(caption_text)
+        
+        btn_copy_caption = QPushButton("📋 Copy Caption")
+        btn_copy_caption.setMaximumWidth(150)
+        btn_copy_caption.setStyleSheet("""
+            QPushButton {
+                background: #00ACC1;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background: #00838F; }
+        """)
+        btn_copy_caption.clicked.connect(lambda: self._copy_to_clipboard(caption))
+        caption_layout.addWidget(btn_copy_caption)
+        
+        layout.addWidget(caption_frame)
+        
+        # Hashtags section
+        if hashtags:
+            hashtag_frame = QFrame()
+            hashtag_frame.setStyleSheet("background: white; border-radius: 4px; padding: 8px;")
+            hashtag_layout = QVBoxLayout(hashtag_frame)
+            hashtag_layout.setContentsMargins(8, 8, 8, 8)
+            
+            lbl = QLabel("🏷️ HASHTAGS:")
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+            lbl.setStyleSheet("color: #00838F;")
+            hashtag_layout.addWidget(lbl)
+            
+            hashtag_text = QTextEdit()
+            hashtag_text.setPlainText(hashtags)
+            hashtag_text.setReadOnly(True)
+            hashtag_text.setMaximumHeight(60)
+            hashtag_text.setStyleSheet("border: 1px solid #ddd; border-radius: 4px; padding: 6px;")
+            hashtag_layout.addWidget(hashtag_text)
+            
+            btn_copy_hashtags = QPushButton("📋 Copy Hashtags")
+            btn_copy_hashtags.setMaximumWidth(150)
+            btn_copy_hashtags.setStyleSheet("""
+                QPushButton {
+                    background: #00ACC1;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover { background: #00838F; }
+            """)
+            btn_copy_hashtags.clicked.connect(lambda: self._copy_to_clipboard(hashtags))
+            hashtag_layout.addWidget(btn_copy_hashtags)
+            
+            layout.addWidget(hashtag_frame)
+        
+        # CTA
+        if cta:
+            cta_frame = QFrame()
+            cta_frame.setStyleSheet("background: white; border-radius: 4px; padding: 8px;")
+            cta_layout = QVBoxLayout(cta_frame)
+            cta_layout.setContentsMargins(8, 8, 8, 8)
+            
+            lbl = QLabel("📢 CALL TO ACTION:")
+            lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+            lbl.setStyleSheet("color: #00838F;")
+            cta_layout.addWidget(lbl)
+            
+            cta_label = QLabel(cta)
+            cta_label.setWordWrap(True)
+            cta_label.setStyleSheet("border: 1px solid #ddd; border-radius: 4px; padding: 6px; background: #f9f9f9;")
+            cta_layout.addWidget(cta_label)
+            
+            layout.addWidget(cta_frame)
+        
+        # Copy All button
+        btn_copy_all = QPushButton("📋 Copy All")
+        btn_copy_all.setMaximumWidth(150)
+        btn_copy_all.setStyleSheet("""
+            QPushButton {
+                background: #0277BD;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px 16px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover { background: #01579B; }
+        """)
+        all_text = f"{caption}\n\n{hashtags}" + (f"\n\n{cta}" if cta else "")
+        btn_copy_all.clicked.connect(lambda: self._copy_to_clipboard(all_text))
+        layout.addWidget(btn_copy_all)
+        
+        self.social_content_layout.addWidget(group)
+    
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard"""
+        QApplication.clipboard().setText(text)
+        self._append_log(f"[INFO] ✓ Đã copy vào clipboard ({len(text)} ký tự)")
     
     def _display_thumbnail_design(self, thumbnail_data):
         """Display thumbnail design"""
