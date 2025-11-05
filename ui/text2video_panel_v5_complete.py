@@ -99,8 +99,8 @@ class StoryboardView(QWidget):
         
         container = QWidget()
         self.grid_layout = QGridLayout(container)
-        self.grid_layout.setSpacing(16)
-        self.grid_layout.setContentsMargins(16, 16, 16, 16)
+        self.grid_layout.setSpacing(12)
+        self.grid_layout.setContentsMargins(12, 12, 12, 12)
         self.grid_layout.setAlignment(Qt.AlignTop)
         
         scroll.setWidget(container)
@@ -116,7 +116,8 @@ class StoryboardView(QWidget):
         col = (scene_num - 1) % 3
         
         card = QFrame()
-        card.setFixedSize(260, 240)
+        card.setMinimumSize(240, 220)
+        card.setMaximumSize(280, 260)
         card.setCursor(Qt.PointingHandCursor)
         card.setStyleSheet("""
             QFrame {
