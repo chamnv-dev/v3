@@ -3,6 +3,10 @@
 Enhanced error handling for script generation
 Fix for Issue #7: Better error messages
 """
+import json
+import sys
+import traceback
+from PyQt5.QtCore import QThread, pyqtSignal
 
 from PyQt5.QtCore import QThread, pyqtSignal
 import traceback
@@ -20,70 +24,43 @@ class ScriptWorker(QThread):
     
     def run(self):
         try:
-            from services import sales_script_service as sscript
-            
-            self.progress.emit("Đang kết nối với AI...")
-            
-            # Generate script
-            outline = sscript.generate_script(self.config)
-            
-            if self.should_stop:
-                return
-            
-            self.progress.emit("✓ Kịch bản đã được tạo")
-            self.done.emit(outline)
+            self.progress.emit("Đang tạo kịch bản...")
+
+            from services.sales_script_service import build_outline
+
+            result = build_outline(self.cfg)
+
+            self.progress.emit("Hoàn thành!")
+            self.done.emit(result)
+
+        except json.JSONDecodeError as e:
+            # Enhanced JSON error handling with detailed info
+            error_msg = (
+                f"JSONDecodeError: Không thể phân tích phản hồi từ LLM.\n"
+                f"Lỗi tại dòng {e.lineno}, cột {e.colno}: {e.msg}\n\n"
+                f"Khắc phục:\n"
+                f"1. Thử lại (LLM có thể tạo phản hồi hợp lệ lần sau)\n"
+                f"2. Giảm độ dài nội dung hoặc ý tưởng\n"
+                f"3. Đơn giản hóa yêu cầu\n"
+                f"4. Kiểm tra kết nối mạng"
+            )
+            self.error.emit(error_msg)
+            # Log full traceback for debugging
+            print("[ERROR] JSONDecodeError in ScriptWorker:", file=sys.stderr)
+            traceback.print_exc()
             
         except ValueError as e:
-            # Specific error handling for JSON issues
-            error_msg = str(e)
+            # Handle empty or invalid responses
+            error_msg = f"ValueError: {str(e)}\n\nKhắc phục: Kiểm tra API key và kết nối mạng."
+            self.error.emit(error_msg)
+            print("[ERROR] ValueError in ScriptWorker:", file=sys.stderr)
+            traceback.print_exc()
             
-            if "Failed to parse JSON" in error_msg:
-                # Issue #7: JSON parsing failed
-                self.progress.emit("❌ Lỗi phân tích dữ liệu từ AI")
-                
-                detailed_error = (
-                    "JSONDecodeError: Không thể đọc kịch bản từ AI\n\n"
-                    "Nguyên nhân có thể:\n"
-                    "• AI trả về dữ liệu không đúng định dạng\n"
-                    "• Kịch bản quá dài hoặc phức tạp\n"
-                    "• Có ký tự đặc biệt trong nội dung\n\n"
-                    "Giải pháp:\n"
-                    "1. Thử viết lại kịch bản với nội dung ngắn gọn hơn\n"
-                    "2. Kiểm tra API key còn hoạt động\n"
-                    "3. Thử đổi model (Gemini ↔ ChatGPT)\n\n"
-                    f"Chi tiết kỹ thuật: {error_msg}"
-                )
-                
-                self.error.emit(detailed_error)
-            else:
-                self.progress.emit(f"❌ {error_msg}")
-                self.error.emit(error_msg)
-        
-        except json.JSONDecodeError as e:
-            # Direct JSON error (shouldn't happen with safe parser, but just in case)
-            self.progress.emit("❌ Lỗi JSON")
-            
-            error_details = (
-                f"JSONDecodeError at line {e.lineno}, column {e.colno}\n\n"
-                f"This error occurred while parsing the AI response.\n"
-                f"The response may contain invalid JSON syntax.\n\n"
-                f"Technical details:\n"
-                f"Position: {e.pos}\n"
-                f"Message: {e.msg}\n\n"
-                f"Please try again or contact support if the issue persists."
-            )
-            
-            self.error.emit(error_details)
-        
         except Exception as e:
-            # Generic error
-            self.progress.emit(f"❌ Lỗi: {str(e)}")
-            
-            # Get full traceback for logging
-            tb = traceback.format_exc()
-            print(f"ScriptWorker error:\n{tb}")
-            
-            self.error.emit(f"Lỗi không xác định: {str(e)}\n\nCheck console for details.")
-    
-    def stop(self):
-        self.should_stop = True
+            # Include exception type name for better error classification
+            error_type = type(e).__name__
+            error_msg = f"{error_type}: {str(e)}"
+            self.error.emit(error_msg)
+            # Log full traceback for debugging
+            print(f"[ERROR] {error_type} in ScriptWorker:", file=sys.stderr)
+            traceback.print_exc()
