@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 
 
 class PromptViewer(QDialog):
-    def __init__(self, prompt_json:str, dialogues=None, parent=None):
+    def __init__(self, prompt_json: str, dialogues=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Prompts - Cảnh")
         self.resize(900, 650)
@@ -176,6 +176,8 @@ class PromptViewer(QDialog):
         # Copy button
         btn_copy = QPushButton("📋 Copy")
         btn_copy.setMaximumWidth(120)
+        # Create darker shade for hover effect
+        hover_color = self._darken_color(border_color)
         btn_copy.setStyleSheet(f"""
             QPushButton {{
                 background: {border_color};
@@ -186,8 +188,7 @@ class PromptViewer(QDialog):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: {border_color};
-                opacity: 0.8;
+                background: {hover_color};
             }}
         """)
         btn_copy.clicked.connect(lambda: self._copy_to_clipboard(text))
@@ -236,7 +237,7 @@ class PromptViewer(QDialog):
                     rate_desc = prosody.get('rate_description', 'normal')
                     audio_text.append(f"  • Rate: {rate:.2f}x ({rate_desc})")
 
-                    pitch = prosody.get('pitch', 0)
+                    pitch = int(prosody.get('pitch', 0))
                     pitch_desc = prosody.get('pitch_description', 'neutral')
                     audio_text.append(f"  • Pitch: {pitch:+d}st ({pitch_desc})")
 
@@ -360,6 +361,24 @@ class PromptViewer(QDialog):
         layout.addWidget(lbl_text)
 
         return frame
+
+    def _darken_color(self, hex_color: str, factor: float = 0.8) -> str:
+        """Darken a hex color by a factor (0.0 to 1.0)"""
+        # Remove # if present
+        hex_color = hex_color.lstrip('#')
+
+        # Convert to RGB
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+
+        # Darken
+        r = int(r * factor)
+        g = int(g * factor)
+        b = int(b * factor)
+
+        # Convert back to hex
+        return f"#{r:02x}{g:02x}{b:02x}"
 
     def _copy_to_clipboard(self, text: str):
         """Copy text to clipboard"""
