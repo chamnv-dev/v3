@@ -1,8 +1,115 @@
 # -*- coding: utf-8 -*-
 from typing import Dict, Any, List, Optional
 import datetime, json, re
+import sys
 from pathlib import Path
 from services.gemini_client import GeminiClient, MissingAPIKey
+
+def parse_llm_response_safe(response_text: str, source: str = "LLM") -> Dict[str, Any]:
+    """
+    Robust JSON parser with 5 fallback strategies to handle malformed LLM responses.
+    
+    Args:
+        response_text: Raw text response from LLM
+        source: Source identifier for logging (e.g., "SalesScript", "SocialMedia")
+    
+    Returns:
+        Parsed JSON dictionary
+        
+    Raises:
+        json.JSONDecodeError: If all parsing strategies fail
+    """
+    import codecs
+    
+    if not response_text or not response_text.strip():
+        raise ValueError(f"Empty response from {source}")
+    
+    # Strategy 1: Direct JSON parse
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] {source} Strategy 1 failed (direct parse): {e}", file=sys.stderr)
+    
+    # Strategy 2: Extract from markdown code blocks
+    try:
+        # Remove markdown code blocks (```json ... ``` or ``` ... ```)
+        cleaned = response_text
+        if "```" in cleaned:
+            # Extract content between code blocks
+            pattern = r'```(?:json)?\s*(.*?)\s*```'
+            matches = re.findall(pattern, cleaned, re.DOTALL)
+            if matches:
+                cleaned = matches[0].strip()
+                return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] {source} Strategy 2 failed (markdown extraction): {e}", file=sys.stderr)
+    
+    # Strategy 3: Fix common issues
+    try:
+        cleaned = response_text.strip()
+        
+        # Remove BOM if present
+        if cleaned.startswith('\ufeff'):
+            cleaned = cleaned[1:]
+        
+        # Remove markdown code blocks
+        cleaned = re.sub(r'```(?:json)?\s*', '', cleaned)
+        cleaned = re.sub(r'\s*```', '', cleaned)
+        
+        # Replace single quotes with double quotes (but not within strings)
+        # Simple approach: only if not already using double quotes
+        if "'" in cleaned and cleaned.count("'") > cleaned.count('"'):
+            # This is a simplified approach - may need refinement
+            cleaned = cleaned.replace("'", '"')
+        
+        # Remove trailing commas before } or ]
+        cleaned = re.sub(r',(\s*[}\]])', r'\1', cleaned)
+        
+        # Fix common escaping issues
+        cleaned = cleaned.replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+        
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] {source} Strategy 3 failed (common fixes): {e}", file=sys.stderr)
+    
+    # Strategy 4: Find JSON by boundaries
+    try:
+        # Find first { and last }
+        start = response_text.find('{')
+        end = response_text.rfind('}')
+        
+        if start != -1 and end != -1 and end > start:
+            json_str = response_text[start:end+1]
+            
+            # Try to parse
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                # Apply fixes from strategy 3
+                json_str = re.sub(r',(\s*[}\]])', r'\1', json_str)
+                return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"[DEBUG] {source} Strategy 4 failed (boundary extraction): {e}", file=sys.stderr)
+    
+    # Strategy 5: Detailed error logging and re-raise
+    print(f"[ERROR] {source} All parsing strategies failed!", file=sys.stderr)
+    print(f"[ERROR] Response length: {len(response_text)} characters", file=sys.stderr)
+    print(f"[ERROR] First 500 chars: {response_text[:500]}", file=sys.stderr)
+    print(f"[ERROR] Last 500 chars: {response_text[-500:]}", file=sys.stderr)
+    
+    # Try one last time to get a better error message
+    try:
+        json.loads(response_text)
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(
+            f"{source} JSON parsing failed after all strategies. "
+            f"Error at line {e.lineno}, column {e.colno}: {e.msg}",
+            e.doc,
+            e.pos
+        )
+    
+    # Should not reach here
+    raise ValueError(f"Unexpected parsing failure for {source}")
 
 def _scene_count(total_sec:int)->int:
     return max(1, (int(total_sec)+8-1)//8)
@@ -14,12 +121,8 @@ def _json_sanitize(raw:str)->str:
     return raw
 
 def _try_parse_json(raw:str)->Dict[str,Any]:
-    raw = _json_sanitize(raw)
-    try:
-        return json.loads(raw)
-    except Exception:
-        raw = raw.replace("```json","").replace("```","")
-        return json.loads(_json_sanitize(raw))
+    """Parse JSON with robust error handling - delegates to parse_llm_response_safe"""
+    return parse_llm_response_safe(raw, "GeneralJSON")
 
 def _models_description(first_model_json:str)->str:
     return first_model_json if first_model_json else "No specific models described."

@@ -2,6 +2,7 @@
 """
 Script Worker - Non-blocking script generation using QThread
 """
+import traceback
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
@@ -29,6 +30,8 @@ class ScriptWorker(QThread):
 
     def run(self):
         """Execute script generation in background thread"""
+        import json
+        
         try:
             self.progress.emit("Đang tạo kịch bản...")
 
@@ -39,7 +42,34 @@ class ScriptWorker(QThread):
             self.progress.emit("Hoàn thành!")
             self.done.emit(result)
 
+        except json.JSONDecodeError as e:
+            # Enhanced JSON error handling with detailed info
+            error_msg = (
+                f"JSONDecodeError: Không thể phân tích phản hồi từ LLM.\n"
+                f"Lỗi tại dòng {e.lineno}, cột {e.colno}: {e.msg}\n\n"
+                f"Khắc phục:\n"
+                f"1. Thử lại (LLM có thể tạo phản hồi hợp lệ lần sau)\n"
+                f"2. Giảm độ dài nội dung hoặc ý tưởng\n"
+                f"3. Đơn giản hóa yêu cầu\n"
+                f"4. Kiểm tra kết nối mạng"
+            )
+            self.error.emit(error_msg)
+            # Log full traceback for debugging
+            print("[ERROR] JSONDecodeError in ScriptWorker:", file=__import__('sys').stderr)
+            traceback.print_exc()
+            
+        except ValueError as e:
+            # Handle empty or invalid responses
+            error_msg = f"ValueError: {str(e)}\n\nKhắc phục: Kiểm tra API key và kết nối mạng."
+            self.error.emit(error_msg)
+            print("[ERROR] ValueError in ScriptWorker:", file=__import__('sys').stderr)
+            traceback.print_exc()
+            
         except Exception as e:
             # Include exception type name for better error classification
             error_type = type(e).__name__
-            self.error.emit(f"{error_type}: {str(e)}")
+            error_msg = f"{error_type}: {str(e)}"
+            self.error.emit(error_msg)
+            # Log full traceback for debugging
+            print(f"[ERROR] {error_type} in ScriptWorker:", file=__import__('sys').stderr)
+            traceback.print_exc()

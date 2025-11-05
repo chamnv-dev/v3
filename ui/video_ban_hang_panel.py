@@ -12,7 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
@@ -1347,17 +1347,59 @@ class VideoBanHangPanel(QWidget):
             self.btn_stop.setEnabled(False)  # PR#4: Disable stop button
 
     def _on_script_error(self, error_msg):
-        """Script error"""
+        """Script error with retry dialog for JSON errors"""
+        # Check for MissingAPIKey
         if error_msg.startswith("MissingAPIKey:"):
             QMessageBox.warning(
                 self, "Thiếu API Key", "Chưa nhập Google API Key trong tab Cài đặt."
             )
             self._append_log("❌ Thiếu Google API Key")
+            self.btn_script.setEnabled(True)
+            self.btn_script.setText("📝 Viết kịch bản")
+            return
+        
+        # Check for JSONDecodeError
+        if "JSONDecodeError" in error_msg:
+            # Enhanced dialog with retry button
+            dialog = QMessageBox(self)
+            dialog.setWindowTitle("Lỗi phân tích JSON")
+            dialog.setIcon(QMessageBox.Warning)
+            
+            # Extract line/column info if available
+            detail_text = error_msg
+            dialog.setText(
+                "⚠️ LLM trả về JSON không hợp lệ.\n\n"
+                "Đây là lỗi tạm thời có thể xảy ra khi LLM tạo phản hồi.\n"
+                "Bạn có thể thử lại ngay bây giờ."
+            )
+            dialog.setDetailedText(detail_text)
+            
+            # Add Retry and Close buttons
+            retry_btn = dialog.addButton("🔄 Thử lại", QMessageBox.AcceptRole)
+            close_btn = dialog.addButton("Đóng", QMessageBox.RejectRole)
+            dialog.setDefaultButton(retry_btn)
+            
+            # Log detailed error for debugging
+            self._append_log(f"❌ JSON Error: {error_msg.split(chr(10))[0]}")
+            print(f"[DEBUG] Full JSON error: {error_msg}", flush=True)
+            
+            # Show dialog and handle response
+            dialog.exec_()
+            
+            if dialog.clickedButton() == retry_btn:
+                # Auto-retry using QTimer.singleShot to avoid blocking
+                self._append_log("🔄 Đang thử lại...")
+                QTimer.singleShot(500, self._on_script_generate_clicked)
+            else:
+                # User chose to close
+                self.btn_script.setEnabled(True)
+                self.btn_script.setText("📝 Viết kịch bản")
         else:
+            # Other errors - show standard dialog
             QMessageBox.critical(self, "Lỗi", error_msg)
             self._append_log(f"❌ Lỗi: {error_msg}")
-        self.btn_script.setEnabled(True)
-        self.btn_script.setText("📝 Viết kịch bản")
+            self.btn_script.setEnabled(True)
+            self.btn_script.setText("📝 Viết kịch bản")
 
     def _display_scene_cards(self, scenes):
         """Display scene cards with SceneResultCard and alternating colors"""
