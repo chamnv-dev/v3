@@ -5,7 +5,7 @@ import re
 
 from PyQt5.Qt import QDesktopServices
 from PyQt5.QtCore import QLocale, QSize, Qt, QThread, QUrl
-from PyQt5.QtGui import QColor, QKeySequence
+from PyQt5.QtGui import QColor, QFont, QKeySequence
 from PyQt5.QtWidgets import (
     QApplication,
     QScrollArea,
@@ -1000,8 +1000,31 @@ class Text2VideoPane(QWidget):
             vi = sc.get('prompt_vi','')
             tgt = sc.get('prompt_tgt','')
             self._cards_state[i] = {'vi': vi, 'tgt': tgt, 'thumb':'', 'videos':{}}
-            it = QListWidgetItem(self._render_card_text(i))
+            
+            # Build card text with larger scene number (Issue #8 fix)
+            scene_text = f"🎬 CẢNH {i}\n"
+            scene_text += "─" * 40 + "\n"
+            if tgt or vi:
+                scene_text += f"📝 {tgt or vi}\n"
+            
+            it = QListWidgetItem(scene_text)
             it.setData(Qt.UserRole, ('scene', i))
+            
+            # Set font for scene number (20px bold) - Issue #8 fix
+            font = QFont()
+            font.setPointSize(14)
+            font.setBold(True)
+            it.setFont(font)
+            
+            # Alternating colors: white for even, light blue for odd - Issue #8 fix
+            if i % 2 == 1:
+                it.setBackground(QColor("#E3F2FD"))  # Light blue for odd
+            else:
+                it.setBackground(QColor("#FFFFFF"))  # White for even
+            
+            # Blue text color for scene title - Issue #8 fix
+            it.setForeground(QColor("#1E88E5"))
+            
             self.cards.addItem(it)
 
         # fill table & save prompts
@@ -1097,10 +1120,9 @@ class Text2VideoPane(QWidget):
         for k in ('status','url','path','thumb','completed_at'):
             if data.get(k): v[k] = data.get(k)
         
-        # Track video download path
-        if data.get('path'):
-            v['video_path'] = data['path']
-            self._append_log(f"[INFO] ✅ Video đã tải về: Cảnh {scene}, Copy {copy} -> {data['path']}")
+        # Track video download path - Issue #8 fix
+        if data.get('path') and os.path.isfile(data['path']):
+            self._append_log(f"✓ Video cảnh {scene} đã tải về: {data['path']}")
         
         if data.get('thumb') and os.path.isfile(data['thumb']):
             st['thumb'] = data['thumb']
@@ -1113,8 +1135,11 @@ class Text2VideoPane(QWidget):
                     from PyQt5.QtGui import QIcon, QPixmap
                     pix=QPixmap(st['thumb']).scaled(self.cards.iconSize(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
                     it.setIcon(QIcon(pix))
+                
+                # Update background color based on status - Issue #8 fix
                 col = self._t2v_status_color(v.get('status'))
-                if col: it.setBackground(col)
+                if col:
+                    it.setBackground(col)
                 break
 
     def _t2v_status_color(self, status):
@@ -1447,7 +1472,7 @@ class Text2VideoPane(QWidget):
             self._append_log(f"[ERR] Lỗi khi tạo Social/Thumbnail: {e}")
 
     def _display_social_media(self, social_data):
-        """Display social media content in the Social tab with enhanced UI"""
+        """Display social media content in the Social tab with enhanced UI - Issue #8 fix"""
         if not social_data:
             return
         
@@ -1463,14 +1488,24 @@ class Text2VideoPane(QWidget):
                 version_data = social_data[version_key]
                 widget_data = self.social_version_widgets[widget_idx]
                 
-                # Set caption (combine title and description)
+                # Enhanced caption formatting - Issue #8 fix
                 caption_parts = []
+                
+                # Add title if present
                 if version_data.get('title'):
-                    caption_parts.append(version_data['title'])
+                    caption_parts.append(f"📌 {version_data['title']}")
+                
+                # Add description
                 if version_data.get('description'):
                     caption_parts.append(version_data['description'])
+                
+                # Add CTA
                 if version_data.get('cta'):
-                    caption_parts.append(f"\n{version_data['cta']}")
+                    caption_parts.append(f"\n👉 {version_data['cta']}")
+                
+                # Add best time to post
+                if version_data.get('best_time'):
+                    caption_parts.append(f"\n⏰ Best time: {version_data['best_time']}")
                 
                 caption_text = "\n\n".join(caption_parts)
                 widget_data["caption"].setPlainText(caption_text)
@@ -1478,7 +1513,10 @@ class Text2VideoPane(QWidget):
                 # Set hashtags
                 hashtags = version_data.get('hashtags', [])
                 if hashtags:
-                    hashtags_text = " ".join(hashtags)
+                    if isinstance(hashtags, list):
+                        hashtags_text = " ".join(hashtags)
+                    else:
+                        hashtags_text = str(hashtags)
                     widget_data["hashtags"].setPlainText(hashtags_text)
         
         # Switch to social tab to show result (optional)
