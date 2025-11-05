@@ -250,7 +250,7 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         "speaking_style": speaking_style,
         "style_description": style_description,
         "text": vo_text,
-        "ssml_markup": f'<speak><prosody rate="{int(rate_multiplier * 100)}%" pitch="{pitch_adjust:+d}%">{vo_text}</prosody></speak>',
+        "ssml_markup": f'<speak><prosody rate="{int(rate_multiplier * 100)}%" pitch="{pitch_adjust:+d}st">{vo_text}</prosody></speak>',
         "prosody": {
             "rate": rate_multiplier,
             "rate_description": rate_description,
@@ -347,7 +347,7 @@ def build_prompt_json(scene_index:int, desc_vi:str, desc_tgt:str, lang_code:str,
         },
         "localization": { 
             "vi": {"prompt": (desc_vi or '').strip()}, 
-            lang_code: {"prompt": (desc_tgt or desc_vi or '').strip()}
+            (lang_code or "en"): {"prompt": (desc_tgt or desc_vi or '').strip()}
         }
     }
     
