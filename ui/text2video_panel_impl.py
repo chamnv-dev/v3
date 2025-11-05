@@ -507,54 +507,55 @@ class _Worker(QObject):
                         
                         self.log.emit(f"[SUCCESS] Scene {scene} Copy {copy_num}: Video ready!")
                         
-                        # Download logic
-                        if auto_download:
-                            fn = f"{title}_scene{scene}_copy{copy_num}.mp4"
-                            fp = os.path.join(dir_videos, fn)
-                            
-                            self.log.emit(f"[INFO] Downloading scene {scene} copy {copy_num}...")
-                            
-                            try:
-                                if self._download(video_url, fp):
-                                    card["status"] = "DOWNLOADED"
-                                    card["path"] = fp
-                                    
-                                    thumb = self._make_thumb(fp, thumbs_dir, scene, copy_num)
-                                    card["thumb"] = thumb
-                                    
-                                    self.log.emit(f"[SUCCESS] ✓ Downloaded: {os.path.basename(fp)}")
-                                else:
-                                    # Track download retries
-                                    download_key = f"{scene}_{copy_num}"
-                                    retries = download_retry_count.get(download_key, 0)
-                                    if retries < max_download_retries:
-                                        download_retry_count[download_key] = retries + 1
-                                        self.log.emit(f"[WARN] Download failed, will retry ({retries + 1}/{max_download_retries})")
-                                        card["status"] = "DOWNLOAD_FAILED"
-                                        card["url"] = video_url
-                                        self.job_card.emit(card)
-                                        new_jobs.append(job_info)
-                                    else:
-                                        self.log.emit(f"[ERR] Download failed after {max_download_retries} attempts")
-                                        card["status"] = "DOWNLOAD_FAILED"
-                                        card["url"] = video_url
-                                        self.job_card.emit(card)
-                            except Exception as e:
-                                # Track download retries for exceptions
+                        # Download logic - Always download videos
+                        fn = f"{title}_scene{scene}_copy{copy_num}.mp4"
+                        fp = os.path.join(dir_videos, fn)
+                        
+                        self.log.emit(f"[INFO] Downloading scene {scene} copy {copy_num}...")
+                        
+                        try:
+                            if self._download(video_url, fp):
+                                card["status"] = "DOWNLOADED"
+                                card["path"] = fp
+                                
+                                thumb = self._make_thumb(fp, thumbs_dir, scene, copy_num)
+                                card["thumb"] = thumb
+                                
+                                self.log.emit(f"[SUCCESS] ✓ Downloaded: {os.path.basename(fp)}")
+                            else:
+                                # Track download retries
                                 download_key = f"{scene}_{copy_num}"
                                 retries = download_retry_count.get(download_key, 0)
                                 if retries < max_download_retries:
                                     download_retry_count[download_key] = retries + 1
-                                    self.log.emit(f"[ERR] Download error: {e} - will retry ({retries + 1}/{max_download_retries})")
+                                    self.log.emit(f"[WARN] Download failed, will retry ({retries + 1}/{max_download_retries})")
                                     card["status"] = "DOWNLOAD_FAILED"
                                     card["url"] = video_url
                                     self.job_card.emit(card)
                                     new_jobs.append(job_info)
+                                    continue
                                 else:
-                                    self.log.emit(f"[ERR] Download error after {max_download_retries} attempts: {e}")
+                                    self.log.emit(f"[ERR] Download failed after {max_download_retries} attempts")
                                     card["status"] = "DOWNLOAD_FAILED"
                                     card["url"] = video_url
                                     self.job_card.emit(card)
+                        except Exception as e:
+                            # Track download retries for exceptions
+                            download_key = f"{scene}_{copy_num}"
+                            retries = download_retry_count.get(download_key, 0)
+                            if retries < max_download_retries:
+                                download_retry_count[download_key] = retries + 1
+                                self.log.emit(f"[ERR] Download error: {e} - will retry ({retries + 1}/{max_download_retries})")
+                                card["status"] = "DOWNLOAD_FAILED"
+                                card["url"] = video_url
+                                self.job_card.emit(card)
+                                new_jobs.append(job_info)
+                                continue
+                            else:
+                                self.log.emit(f"[ERR] Download error after {max_download_retries} attempts: {e}")
+                                card["status"] = "DOWNLOAD_FAILED"
+                                card["url"] = video_url
+                                self.job_card.emit(card)
                         
                         self.job_card.emit(card)
                     else:
