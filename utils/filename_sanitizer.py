@@ -98,11 +98,11 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     # Convert Vietnamese to ASCII
     name = remove_vietnamese_accents(name)
     
-    # Replace colons with dashes (common in titles)
+    # Replace colons with dashes (common in titles like "Project: Name")
     name = name.replace(':', ' -')
     
-    # Remove invalid path characters: < > : " / \ | ? *
-    name = re.sub(r'[<>:"/\\|?*]', '', name)
+    # Remove invalid path characters: < > " / \ | ? * (colon already handled above)
+    name = re.sub(r'[<>"/\\|?*]', '', name)
     
     # Replace spaces with underscores
     name = name.replace(' ', '_')
@@ -148,11 +148,11 @@ def sanitize_project_name(project_name: str, max_length: int = 100) -> str:
     # Convert Vietnamese to ASCII
     name = remove_vietnamese_accents(project_name)
     
-    # Replace colons with dashes
+    # Replace colons with dashes (common in project names like "Project: Name")
     name = name.replace(':', ' -')
     
-    # Remove invalid path characters
-    name = re.sub(r'[<>:"/\\|?*]', '', name)
+    # Remove invalid path characters: < > " / \ | ? * (colon already handled above)
+    name = re.sub(r'[<>"/\\|?*]', '', name)
     
     # Replace spaces with underscores
     name = name.replace(' ', '_')
